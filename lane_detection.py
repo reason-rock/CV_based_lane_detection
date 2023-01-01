@@ -5,7 +5,9 @@ from cv2 import Canny #opencv import
 import numpy as np #import numpy
 import matplotlib.pyplot as plt #ROI 지정
 import os
-cap = cv2.VideoCapture("test.mp4")
+
+#cap = cv2.VideoCapture("test.mp4")
+cap = cv2.VideoCapture("123.mp4")
 
 
 def pre_processing(image): # 캐니 함수 지정
@@ -38,6 +40,7 @@ def draw_line(image, hough_lines): #검정 배경 만들고 위에 차선 그음
     return line_layer
 
 def lane_define(image, hough_lines):
+    global glane_gradient
     left_raw = [] 
     right_raw = [] #왼/오른쪽 차선 값 임시로 받아오는 어레이
     for lane in hough_lines:
@@ -49,13 +52,11 @@ def lane_define(image, hough_lines):
         #print(format(lane_gradient, 'f'), "lane_gradient")
         #print("----")
         #print(y_intecept, "intercep")
+        glane_gradient = lane_gradient
         if lane_gradient < 0: # 기울기 기준으로 좌/우 라인 구분
             left_raw.append((lane_gradient, y_intecept))
         else:
             right_raw.append((lane_gradient, y_intecept))
-
-  
-
     #print(left_raw, 'left') #왼쪽 값
     #print(right_raw, 'right') #오른쪽 값
     left_average = np.average(left_raw, axis=0)
@@ -66,26 +67,43 @@ def lane_define(image, hough_lines):
     right_line = make_coordinates(image, right_average)
     return np.array([left_line, right_line])
 
+
+delay = 0
 while(cap.isOpened()):
     _, frame = cap.read() #프레임 불러오기
     pre_processed_img = pre_processing(frame) #전처리
     roi_inage = roi_set(pre_processed_img) #ROI 설정
-    cv2.imshow("ROI", roi_inage)
-    cv2.imshow("RAW", frame)
+    #cv2.imshow("ROI", roi_inage)
+    #cv2.imshow("RAW", frame)
     hough_lines = cv2.HoughLinesP(roi_inage, 1 , np.pi/180, 100, np.array([]), minLineLength=40, maxLineGap=5)
     try:
         defined_lines = lane_define(roi_inage, hough_lines) #라인 도출
     except:
         pass
+    #print(delay)
     try:
-        line_output= draw_line(frame, defined_lines) #라인 시각화
+        print(abs(glane_gradient))
+        print(delay)
+        if not -1 <glane_gradient<0.6:
+            try:
+                line_output= draw_line(frame, defined_lines) #라인 시각화
+                delay = 0
+            except:
+                delay += 1
+                pass
+        else:
+            delay += 1
     except:
         pass
+    if delay == 150:
+        line_output = np.zeros_like(frame)
+        delay = 0
     try:
         final_image = cv2.addWeighted(frame, 0.8, line_output, 1, 1) #이미지 두개 합침 / 이미지1, 투명도, 이미ㅈ2, 투명도, rgb 픽셀 밝기
     except:
         pass
     try:
+        cv2.namedWindow("Lane_detection", flags=cv2.WINDOW_NORMAL)
         cv2.imshow("Lane_detection", final_image)
     except:
         pass
